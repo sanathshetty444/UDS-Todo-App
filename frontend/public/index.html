@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Simple Todo App</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 600px;
+                margin: 50px auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            .container {
+                background: white;
+                padding: 30px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            h1 {
+                text-align: center;
+                color: #333;
+            }
+            .add-form {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 30px;
+            }
+            .add-form input {
+                flex: 1;
+                padding: 10px;
+                border: 2px solid #ddd;
+                border-radius: 4px;
+            }
+            .add-form button {
+                padding: 10px 20px;
+                background: #007bff;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            .add-form button:hover {
+                background: #0056b3;
+            }
+            .todo-item {
+                display: flex;
+                align-items: center;
+                padding: 15px;
+                border: 1px solid #eee;
+                border-radius: 4px;
+                margin-bottom: 10px;
+                background: #fafafa;
+            }
+            .todo-item.completed {
+                opacity: 0.6;
+                text-decoration: line-through;
+            }
+            .todo-item input[type="checkbox"] {
+                margin-right: 15px;
+            }
+            .todo-text {
+                flex: 1;
+            }
+            .delete-btn {
+                background: #dc3545;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+                cursor: pointer;
+            }
+            .delete-btn:hover {
+                background: #c82333;
+            }
+            .status {
+                text-align: center;
+                padding: 10px;
+                margin-bottom: 20px;
+                border-radius: 4px;
+            }
+            .status.success {
+                background: #d4edda;
+                color: #155724;
+            }
+            .status.error {
+                background: #f8d7da;
+                color: #721c24;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Simple Todo App</h1>
+            <p style="text-align: center; color: #666">
+                Two Node.js microservices communicating via RAW Unix Domain
+                Socket
+            </p>
+            <p style="text-align: center; color: #999; font-size: 0.9em">
+                No HTTP overhead - direct socket communication!
+            </p>
+
+            <div id="status"></div>
+
+            <form class="add-form" id="addForm">
+                <input
+                    type="text"
+                    id="todoInput"
+                    placeholder="Enter a new todo..."
+                    required
+                />
+                <button type="submit">Add Todo</button>
+            </form>
+
+            <div id="todoList"></div>
+        </div>
+
+        <script>
+            let todos = [];
+
+            // API functions
+            async function fetchTodos() {
+                try {
+                    const response = await fetch("/api/todos");
+                    todos = await response.json();
+                    renderTodos();
+                    showStatus("Todos loaded successfully", "success");
+                } catch (error) {
+                    showStatus("Failed to load todos", "error");
+                }
+            }
+
+            async function addTodo(title) {
+                try {
+                    const response = await fetch("/api/todos", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ title }),
+                    });
+                    const newTodo = await response.json();
+                    todos.push(newTodo);
+                    renderTodos();
+                    showStatus("Todo added successfully", "success");
+                } catch (error) {
+                    showStatus("Failed to add todo", "error");
+                }
+            }
+
+            async function toggleTodo(id, completed) {
+                try {
+                    const response = await fetch(`/api/todos/${id}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ completed }),
+                    });
+                    const updatedTodo = await response.json();
+                    todos = todos.map((t) => (t.id === id ? updatedTodo : t));
+                    renderTodos();
+                    showStatus("Todo updated successfully", "success");
+                } catch (error) {
+                    showStatus("Failed to update todo", "error");
+                }
+            }
+
+            async function deleteTodo(id) {
+                try {
+                    await fetch(`/api/todos/${id}`, { method: "DELETE" });
+                    todos = todos.filter((t) => t.id !== id);
+                    renderTodos();
+                    showStatus("Todo deleted successfully", "success");
+                } catch (error) {
+                    showStatus("Failed to delete todo", "error");
+                }
+            }
+
+            // UI functions
+            function renderTodos() {
+                const todoList = document.getElementById("todoList");
+
+                if (todos.length === 0) {
+                    todoList.innerHTML =
+                        '<p style="text-align: center; color: #666;">No todos yet. Add one above!</p>';
+                    return;
+                }
+
+                todoList.innerHTML = todos
+                    .map(
+                        (todo) => `
+                <div class="todo-item ${todo.completed ? "completed" : ""}">
+                    <input type="checkbox" ${todo.completed ? "checked" : ""} 
+                           onchange="toggleTodo(${todo.id}, this.checked)">
+                    <span class="todo-text">${todo.title}</span>
+                    <button class="delete-btn" onclick="deleteTodo(${
+                        todo.id
+                    })">Delete</button>
+                </div>
+            `
+                    )
+                    .join("");
+            }
+
+            function showStatus(message, type) {
+                const statusDiv = document.getElementById("status");
+                statusDiv.textContent = message;
+                statusDiv.className = `status ${type}`;
+                setTimeout(() => {
+                    statusDiv.textContent = "";
+                    statusDiv.className = "";
+                }, 3000);
+            }
+
+            // Event listeners
+            document
+                .getElementById("addForm")
+                .addEventListener("submit", (e) => {
+                    e.preventDefault();
+                    const input = document.getElementById("todoInput");
+                    const title = input.value.trim();
+                    if (title) {
+                        addTodo(title);
+                        input.value = "";
+                    }
+                });
+
+            // Load todos on page load
+            fetchTodos();
+
+            // Check health status
+            fetch("/health")
+                .then((res) => res.json())
+                .then((data) => {
+                    console.log("Health check:", data);
+                    if (data.backend) {
+                        showStatus(
+                            `Connected! Backend has ${data.backend.todos} todos`,
+                            "success"
+                        );
+                    }
+                })
+                .catch(() => {
+                    showStatus("Backend connection failed", "error");
+                });
+        </script>
+    </body>
+</html>
